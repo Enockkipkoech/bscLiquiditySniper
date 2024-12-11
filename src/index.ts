@@ -1,6 +1,7 @@
-import { app } from './app';
+import './database/connect';
 import { config } from './config';
 import figlet from 'figlet';
+import { app } from './app';
 
 process.on('uncaughtException', (err) => {
 	console.log('UNCAUGHT EXCEPTION! 💥 App Shutting down...');

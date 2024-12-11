@@ -27,7 +27,11 @@ const logger = async (
 };
 
 // CONFIG
-if (!config.APP.PORT && config.APP.NODE_ENV! !== 'production') {
+if (
+	!config.APP.PORT &&
+	config.APP.NODE_ENV! !== 'production' &&
+	!config.PANCAKESWAP.PROVIDER
+) {
 	const dotenv = require('dotenv');
 	dotenv.config({ path: '../.env' });
 	app.use(logger);
