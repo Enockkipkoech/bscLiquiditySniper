@@ -4,6 +4,8 @@ import { config } from './config';
 import cors from 'cors';
 import bodyparser from 'body-parser';
 
+import { dataStream } from './dataStream';
+
 const app = express();
 
 const logger = async (
@@ -53,6 +55,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors(corsOptions));
 app.use(bodyparser.json());
 app.use(logger);
+
+// STREAMING DATA
+dataStream();
 
 // ROUTES
 app.get('/', async (req: express.Request, res: express.Response) => {
