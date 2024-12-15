@@ -57,7 +57,7 @@ app.use(bodyparser.json());
 app.use(logger);
 
 // STREAMING DATA
-dataStream();
+// dataStream(); TODO - Uncomment this line to start the data stream
 
 // ROUTES
 app.get('/', async (req: express.Request, res: express.Response) => {
@@ -70,6 +70,8 @@ app.get('/', async (req: express.Request, res: express.Response) => {
 		}),
 	});
 });
+
+import './routes';
 
 app.use('*', (req: express.Request, res: express.Response) => {
 	res.status(404).json({
