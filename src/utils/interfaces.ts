@@ -22,3 +22,12 @@ export interface Overloads {
 	value?: number;
 	currentNonce?: number;
 }
+
+export interface Token {
+	symbol: string;
+	address: string;
+	decimals: number;
+	balance: string;
+	amountInUsd: string;
+	info: any;
+}

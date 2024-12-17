@@ -3,13 +3,16 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 
 const provider = config.PROVIDER;
-const contract = new ethers.Contract(config.PANCAKESWAP.ROUTER, ABI, provider);
+
+const signer = new ethers.Wallet(config.WALLET.secretKey!);
+const account = signer.connect(provider);
+const contract = new ethers.Contract(config.PANCAKESWAP.ROUTER, ABI, account);
 
 // getTokenBalance
 export const getTokenBalance = async (tokenAddress: string, wallet: string) => {
 	try {
 		const contract = new ethers.Contract(tokenAddress, ABI, provider);
-		const balance = await contract.balanceOf(wallet);      
+		const balance = await contract.balanceOf(wallet);
 
 		return { success: true, data: balance };
 	} catch (error) {
@@ -21,14 +24,23 @@ export const getTokenBalance = async (tokenAddress: string, wallet: string) => {
 
 // GetAmountsOut
 export const getAmountsOut = async (amountIn: string, path: string[]) => {
+	const amountsOutABI = [
+		'function getAmountsOut(uint amountIn, address[] memory path) public view  returns (uint[] memory amounts)',
+	];
+	const contract = new ethers.Contract(
+		config.PANCAKESWAP.ROUTER,
+		amountsOutABI,
+		provider
+	);
 	try {
 		const amounts = await contract.getAmountsOut(amountIn, path);
+		console.log('AMOUNTS:', amounts);
 
-		return { success: true, data: amounts };
-	} catch (error) {
+		return amounts;
+	} catch (error: any) {
 		console.log('Error getting amounts:', error);
 
-		return { success: false, data: error };
+		return null;
 	}
 };
 
@@ -41,7 +53,48 @@ export const getWalletNonce = async (wallet: string) => {
 	} catch (error) {
 		console.log('Error getting nonce:', error);
 
-		return { success: false, data: error };
+		return { success: false, data: 0 };
+	}
+};
+
+// Get Allowance for token
+export const getAllowance = async (token: string): Promise<string> => {
+	try {
+		const contract = new ethers.Contract(token, ABI, account);
+		const allowance = await contract.allowance(
+			account,
+			config.PANCAKESWAP.ROUTER
+		);
+		const decimals = await contract.decimals();
+		return ethers.formatUnits(allowance, decimals);
+	} catch (error) {
+		return '0';
+	}
+};
+
+// Approve Allowance
+const approveABI = [
+	'function approve(address _spender, uint256 _value) public returns (bool success)',
+];
+const MAX_INT =
+	'115792089237316195423570985008687907853269984665640564039457584007913129639935';
+export const approveAllowance = async (token: string) => {
+	try {
+		const overloads = {
+			gasPrice: 2000000000,
+			gasLimit: 300000,
+		};
+		console.log('APPROVING ALLOWANCE');
+		const contract = new ethers.Contract(token, approveABI, account);
+		let approveTx = await contract.approve(
+			config.PANCAKESWAP.ROUTER,
+			MAX_INT,
+			overloads
+		);
+		// await approveTx.wait();
+		return { success: true, data: approveTx };
+	} catch (error) {
+		console.log('Error approving allowance:', error);
 	}
 };
 
@@ -52,7 +105,7 @@ export const swapToken = async (
 	path: string[],
 	to: string,
 	deadline: number,
-	overloads: any
+	overloads?: any
 ) => {
 	try {
 		const transaction =
@@ -64,9 +117,9 @@ export const swapToken = async (
 				deadline,
 				overloads
 			);
-		await transaction.wait();
+		// await transaction.wait();
 
-		return { success: true, data: transaction.hash };
+		return { success: true, data: transaction };
 	} catch (error) {
 		console.log('Error swapping tokens:', error);
 
@@ -78,19 +131,15 @@ export const swapToken = async (
 
 export const swapETHforToken = async (
 	amountOutMin: string,
-	amountIn: string,
-	to: string,
-	gasPrice: Number,
-	gasLimit: Number,
 	path: string[],
-	nonce: Number
+	to: string,
+	amountIn: string,
+	overloads?: any
 ) => {
 	try {
 		const deadline = Math.floor(Date.now() / 1000) + 60 * 2; // 2 minutes
-		const overloads = {
-			gasPrice: gasPrice,
-			gasLimit: gasLimit,
-			nonce: nonce,
+		const _overloads = {
+			...overloads,
 			value: amountIn,
 		};
 		const transaction =
@@ -99,11 +148,11 @@ export const swapETHforToken = async (
 				path,
 				to,
 				deadline,
-				overloads
+				_overloads
 			);
-		await transaction.wait();
+		// await transaction.wait();
 
-		return { success: true, data: transaction.hash };
+		return { success: true, data: transaction };
 	} catch (error) {
 		console.log('Error swapping ETH:', error);
 
@@ -119,8 +168,11 @@ export const swapTokenForETH = async (
 	path: string[],
 	to: string,
 	deadline: number,
-	overloads: any
+	overloads?: any
 ) => {
+	console.log(
+		`SWAPPING TOKEN FOR ETH: ${amountIn}, ${amountOutMin}, ${path}, ${to}, ${deadline}, ${overloads}`
+	);
 	try {
 		const transaction =
 			await contract.swapExactTokensForETHSupportingFeeOnTransferTokens(
@@ -131,9 +183,8 @@ export const swapTokenForETH = async (
 				deadline,
 				overloads
 			);
-		await transaction.wait();
 
-		return { success: true, data: transaction.hash };
+		return { success: true, data: transaction };
 	} catch (error) {
 		console.log('Error swapping tokens:', error);
 

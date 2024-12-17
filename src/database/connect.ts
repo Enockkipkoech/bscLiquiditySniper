@@ -10,11 +10,11 @@ const connectDB = async () => {
 		});
 		let message = '\n****BSC LIQUIDSNIPER DB Connection Successful****';
 		console.log(message);
-		tgMessage(message);
+		// tgMessage(message);
 	} catch (error) {
 		let message = `Error BSC LIQUIDSNIPER DB Connection: ${error}`;
 		console.log(message);
-		tgMessage(message);
+		// tgMessage(message);
 	}
 };
 

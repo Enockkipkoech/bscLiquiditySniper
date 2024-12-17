@@ -1,4 +1,3 @@
-import { config } from '../config';
 import {
 	swapToken,
 	swapETHforToken,
@@ -6,7 +5,10 @@ import {
 	getAmountsOut,
 	getWalletNonce,
 	getTokenBalance,
+	getAllowance,
+	approveAllowance,
 } from '../ERC20';
+import { supportedTokens } from '../ERC20/supportedTokens';
 
 export const swapTokens = async (
 	tokenIn: string,
@@ -14,44 +16,75 @@ export const swapTokens = async (
 	amountIn: string,
 	toAddress: string
 ) => {
-	const amountOutMin = '0';
+	const SupportedTokens = supportedTokens();
 
+	// Validate that tokenIn and tokenOut are supported
+	let tokenInAddress = '';
+	let tokenOutAddress = '';
+	const isTokenInSupported = SupportedTokens.find(
+		(token) => token.symbol === tokenIn
+	);
+	const isTokenOutSupported = SupportedTokens.find(
+		(token) => token.symbol === tokenOut
+	);
+	console.log({ isTokenInSupported, isTokenOutSupported });
+
+	tokenInAddress = isTokenInSupported ? isTokenInSupported.address : '';
+	tokenOutAddress = isTokenOutSupported ? isTokenOutSupported.address : '';
+
+	if (!tokenInAddress || !tokenOutAddress) {
+		console.log(
+			`Error: One or both tokens are not supported. tokenIn: ${tokenIn}, tokenOut: ${tokenOut}`
+		);
+		return {
+			success: false,
+			data: `Unsupported token(s). Supported tokens are: ${SupportedTokens.map(
+				(token) => token.symbol
+			).join(', ')}`,
+		};
+	}
 	// Check if tokenIn is ETH
 	if (tokenIn === 'BNB') {
-		let path = [`${config.PANCAKESWAP.WBNB_ADDRESS}`, tokenOut];
+		let path = [tokenInAddress, tokenOutAddress];
 		const amountsOut = await getAmountsOut(amountIn, path);
 
-		if (!amountsOut.success) {
-			console.log('Error getting amounts:', amountsOut.data);
-			return { success: false, data: amountsOut.data };
+		if (!amountsOut) {
+			console.log('Error getting amounts:', amountsOut);
+			return { success: false, data: amountsOut };
 		}
-		let _amountIn = amountsOut.data[0];
+		const amountOutMin = amountsOut[1];
+		let _amountIn = parseInt(amountsOut[0]);
 
-		const tokenBalance = await getTokenBalance(tokenIn, toAddress);
+		console.log({ _amountIn, amountOutMin });
+
+		const tokenBalance = await getTokenBalance(tokenInAddress, toAddress);
 
 		const walletNonce = await getWalletNonce(toAddress);
+		const allowance = await getAllowance(tokenInAddress);
 
-		console.log({ walletNonce, tokenBalance, amountsOut });
+		console.log({ walletNonce, allowance, tokenBalance, amountsOut });
 
-		if (!walletNonce.success) {
-			console.log('Error getting nonce:', walletNonce.data);
-			return { success: false, data: walletNonce.data };
+		if (!walletNonce.success || !allowance) {
+			console.log(
+				'Error getting Nonce || Allowance',
+				walletNonce.data,
+				allowance
+			);
+			return { success: false, data: walletNonce.data, allowance };
 		}
 		const overloads = {
-			gasPrice: 2000000,
-			gasLimit: 5000000,
+			gasPrice: 2000000000,
+			gasLimit: 3000000,
 			nonce: walletNonce.data ? Number(walletNonce.data) : 0,
 		};
 
 		const swap = await swapETHforToken(
 			amountOutMin,
-			_amountIn,
-			toAddress,
-			overloads.gasPrice,
-			overloads.gasLimit,
 			path,
-			overloads.nonce
+			toAddress,
+			amountsOut[0]
 		);
+		console.log({ swap });
 
 		if (!swap.success) {
 			console.log('Error swapping tokens:', swap.data);
@@ -60,29 +93,27 @@ export const swapTokens = async (
 
 		return { success: true, data: swap.data };
 	} else if (tokenOut === 'BNB') {
-		let path = [tokenIn, `${config.PANCAKESWAP.WBNB_ADDRESS}`];
+		let path = [tokenInAddress, tokenOutAddress];
 		const amountsOut = await getAmountsOut(amountIn, path);
 		const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
-		const _amountIn = amountsOut.data[0];
+		const _amountIn = amountsOut[0];
+		const amountOutMin = amountsOut[1];
 
-		if (!amountsOut.success) {
-			console.log('Error getting amounts:', amountsOut.data);
-			return { success: false, data: amountsOut.data };
+		if (!amountsOut) {
+			console.log('Error getting amounts:', amountsOut);
+			return { success: false, data: amountsOut };
 		}
 
-		const tokenBalance = await getTokenBalance(tokenIn, toAddress);
+		const tokenBalance = await getTokenBalance(tokenInAddress, toAddress);
 
 		const walletNonce = await getWalletNonce(toAddress);
-		console.log({ walletNonce, tokenBalance, amountsOut });
 
-		if (!walletNonce.success) {
-			console.log('Error getting nonce:', walletNonce.data);
-			return { success: false, data: walletNonce.data };
-		}
 		const overloads = {
-			gasPrice: 2000000,
-			gasLimit: 5000000,
+			gasPrice: 3000000000,
+			gasLimit: 30000000,
+			nonce: walletNonce.data ? Number(walletNonce.data) + 1 : 1,
 		};
+		console.log({ tokenBalance, amountsOut, overloads });
 
 		const swap = await swapTokenForETH(
 			_amountIn,
@@ -92,6 +123,7 @@ export const swapTokens = async (
 			deadline,
 			overloads
 		);
+		console.log({ swap });
 
 		if (!swap.success) {
 			console.log('Error swapping tokens:', swap.data);
@@ -100,41 +132,60 @@ export const swapTokens = async (
 
 		return { success: true, data: swap.data };
 	} else {
-		let path = [tokenIn, tokenOut];
+		let path = [tokenInAddress, tokenOutAddress];
+		console.log({ path });
 		const amountsOut = await getAmountsOut(amountIn, path);
-		const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
 
-		console.log({ amountsOut, deadline });
-
-		if (!amountsOut.success) {
-			console.log('Error getting amounts:', amountsOut.data);
-			return { success: false, data: amountsOut.data };
+		if (!amountsOut) {
+			console.log('Error: Insufficient Amounts Input', amountsOut);
+			return { success: false, data: amountsOut };
 		}
-		let _amountIn = amountsOut.data[0];
 
-		const tokenBalance = await getTokenBalance(tokenIn, toAddress);
+		const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+		let _amountOutMin = amountsOut[1].toString();
+		let _amountIn = parseInt(amountsOut[0]);
 
+		console.log({ _amountIn, _amountOutMin, tokenInAddress, tokenOutAddress });
+
+		// Get Allowance
+		const allowance = await getAllowance(tokenInAddress);
+		console.log({ allowance });
+
+		if (allowance < amountIn) {
+			const approve = await approveAllowance(tokenInAddress);
+
+			if (!approve!.success) {
+				console.log('Error approving allowance:', approve!.data);
+				return { success: false, data: approve!.data };
+			}
+		}
+
+		const tokenBalance = await getTokenBalance(tokenInAddress, toAddress);
 		const walletNonce = await getWalletNonce(toAddress);
 
-		console.log({ walletNonce, tokenBalance, amountsOut, _amountIn });
+		console.log({
+			walletNonce,
+			tokenBalance,
+			amountsOut,
+			_amountIn,
+			allowance,
+		});
 
-		if (!walletNonce.success) {
-			console.log('Error getting nonce:', walletNonce.data);
-			return { success: false, data: walletNonce.data };
-		}
 		const overloads = {
-			gasPrice: 2000000,
-			gasLimit: 5000000,
+			gasPrice: 1000000000,
+			gasLimit: 200000,
 		};
 
 		const swap = await swapToken(
-			_amountIn,
-			amountOutMin,
+			amountsOut[0],
+			_amountOutMin,
 			path,
 			toAddress,
 			deadline,
 			overloads
 		);
+
+		console.log({ swap });
 
 		if (!swap.success) {
 			console.log('Error swapping tokens:', swap.data);

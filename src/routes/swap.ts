@@ -9,10 +9,11 @@ router.get('/swap', async (req: Request, res: Response) => {
 
 router.post('/swaps', async (req: Request, res: Response) => {
 	const { tokenIn, tokenOut, amountIn, toAddress } = req.body;
+	console.log({ tokenIn, tokenOut, amountIn, toAddress });
 	// Call swapTokens function
 	const swap = await swapTokens(tokenIn, tokenOut, amountIn, toAddress);
 	// Return response
-	console.log(swap);
+	// console.log(swap);
 	res.status(200).json({ success: true, message: 'Swap route', data: swap });
 });
 
